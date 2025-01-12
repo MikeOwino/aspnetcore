@@ -356,10 +356,9 @@ internal sealed class OpenApiDocumentService(
         IOpenApiSchemaTransformer[] schemaTransformers,
         CancellationToken cancellationToken)
     {
-        var description = ReasonPhrases.GetReasonPhrase(statusCode);
         var response = new OpenApiResponse
         {
-            Description = description,
+            Description = apiResponseType.Description ?? ReasonPhrases.GetReasonPhrase(statusCode),
             Content = new Dictionary<string, OpenApiMediaType>()
         };
 
@@ -411,7 +410,7 @@ internal sealed class OpenApiDocumentService(
                     "Query" => ParameterLocation.Query,
                     "Header" => ParameterLocation.Header,
                     "Path" => ParameterLocation.Path,
-                    _ => throw new InvalidOperationException($"Unsupported parameter source: {parameter.Source.Id}")
+                    _ => ParameterLocation.Query
                 },
                 Required = IsRequired(parameter),
                 Schema = await _componentService.GetOrCreateSchemaAsync(GetTargetType(description, parameter), scopedServiceProvider, schemaTransformers, parameter, cancellationToken: cancellationToken),

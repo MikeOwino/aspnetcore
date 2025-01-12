@@ -30,16 +30,22 @@ public static class OpenApiEndpointRouteBuilderExtensions
         var options = endpoints.ServiceProvider.GetRequiredService<IOptionsMonitor<OpenApiOptions>>();
         return endpoints.MapGet(pattern, async (HttpContext context, string documentName = OpenApiConstants.DefaultDocumentName) =>
             {
+                // We need to retrieve the document name in a case-insensitive manner
+                // to support case-insensitive document name resolution.
+                // Keyed Services are case-sensitive by default, which doesn't work well for document names in ASP.NET Core
+                // as routing in ASP.NET Core is case-insensitive by default.
+                var lowercasedDocumentName = documentName.ToLowerInvariant();
+
                 // It would be ideal to use the `HttpResponseStreamWriter` to
                 // asynchronously write to the response stream here but Microsoft.OpenApi
                 // does not yet support async APIs on their writers.
                 // See https://github.com/microsoft/OpenAPI.NET/issues/421 for more info.
-                var documentService = context.RequestServices.GetKeyedService<OpenApiDocumentService>(documentName);
+                var documentService = context.RequestServices.GetKeyedService<OpenApiDocumentService>(lowercasedDocumentName);
                 if (documentService is null)
                 {
                     context.Response.StatusCode = StatusCodes.Status404NotFound;
                     context.Response.ContentType = "text/plain;charset=utf-8";
-                    await context.Response.WriteAsync($"No OpenAPI document with the name '{documentName}' was found.");
+                    await context.Response.WriteAsync($"No OpenAPI document with the name '{lowercasedDocumentName}' was found.");
                 }
                 else
                 {
@@ -49,8 +55,16 @@ public static class OpenApiEndpointRouteBuilderExtensions
                     using var writer = Utf8BufferTextWriter.Get(output);
                     try
                     {
-                        document.Serialize(new OpenApiJsonWriter(writer), documentOptions.OpenApiVersion);
-                        context.Response.ContentType = "application/json;charset=utf-8";
+                        if (UseYaml(pattern))
+                        {
+                            document.Serialize(new OpenApiYamlWriter(writer), documentOptions.OpenApiVersion);
+                            context.Response.ContentType = "text/plain+yaml;charset=utf-8";
+                        }
+                        else
+                        {
+                            document.Serialize(new OpenApiJsonWriter(writer), documentOptions.OpenApiVersion);
+                            context.Response.ContentType = "application/json;charset=utf-8";
+                        }
                         await context.Response.BodyWriter.WriteAsync(output.ToArray(), context.RequestAborted);
                         await context.Response.BodyWriter.FlushAsync(context.RequestAborted);
                     }
@@ -63,4 +77,8 @@ public static class OpenApiEndpointRouteBuilderExtensions
                 }
             }).ExcludeFromDescription();
     }
+
+    private static bool UseYaml(string pattern) =>
+        pattern.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) ||
+        pattern.EndsWith(".yml", StringComparison.OrdinalIgnoreCase);
 }
