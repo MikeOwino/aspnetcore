@@ -98,7 +98,8 @@ internal sealed class Program
 
                 CommandOption trust = null;
                 trust = c.Option("-t|--trust",
-                    "Trust the certificate on the current platform. When combined with the --check option, validates that the certificate is trusted.",
+                    "When not combined with the --check option, trusts the certificate on the current platform, creating one if necessary.\n" +
+                    "                     When combined with the --check option, validates that there is a certificate and it is trusted.",
                     CommandOptionType.NoValue);
 
                 var verbose = c.Option("-v|--verbose",
@@ -424,6 +425,10 @@ internal sealed class Program
                 return ErrorSavingTheCertificate;
             case EnsureCertificateResult.ErrorExportingTheCertificate:
                 reporter.Warn("There was an error exporting the HTTPS developer certificate to a file.");
+                return ErrorExportingTheCertificate;
+            case EnsureCertificateResult.ErrorExportingTheCertificateToNonExistentDirectory:
+                // A distinct warning is useful, but a distinct error code is probably not.
+                reporter.Warn("There was an error exporting the HTTPS developer certificate to a file. Please create the target directory before exporting. Choose permissions carefully when creating it.");
                 return ErrorExportingTheCertificate;
             case EnsureCertificateResult.PartiallyFailedToTrustTheCertificate:
                 // A distinct warning is useful, but a distinct error code is probably not.
